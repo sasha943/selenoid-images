@@ -6,7 +6,7 @@ APPIUM_ARGS=${APPIUM_ARGS:-""}
 PORT=${PORT:-"4444"}
 DISPLAY=99
 SCREEN_RESOLUTION=${SCREEN_RESOLUTION:-"1920x1080x24"}
-SKIN=${SKIN:-"1080x1920"}
+SKIN=${SKIN:-"1536x2048"}
 STOP=""
 
 clean() {
@@ -64,7 +64,7 @@ if [ -x "/usr/bin/chromedriver" ]; then
     APPIUM_ARGS="$APPIUM_ARGS --chromedriver-executable /usr/bin/chromedriver"
 fi
 
-/opt/node_modules/.bin/appium -a 0.0.0.0 -p "$PORT" -bp "$BOOTSTRAP_PORT" -U "$EMULATOR" --platform-name Android --device-name android --log-timestamp --log-no-colors --command-timeout 90 --no-reset ${APPIUM_ARGS} --default-capabilities '{"androidNaturalOrientation": true}' &
+/opt/node_modules/.bin/appium -a 0.0.0.0 -p "$PORT" -bp "$BOOTSTRAP_PORT" -U "$EMULATOR" --platform-name Android --device-name android --relaxed-security --log-timestamp --log-no-colors --command-timeout 90 --no-reset ${APPIUM_ARGS} --default-capabilities '{"androidNaturalOrientation": true}' &
 APPIUM_PID=$!
 
 wait

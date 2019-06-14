@@ -1,6 +1,6 @@
 FROM ubuntu:18.04
 
-ARG APPIUM_VERSION="1.8.1"
+ARG APPIUM_VERSION="1.9.1"
 
 RUN \
     apt update && \
