@@ -18,7 +18,7 @@ request_answer(){
     prompt=$1
     default_value=$2
     if [ -n "$default_value" ]; then
-        prompt="$prompt [$default_value]"    
+        prompt="$prompt [$default_value]"
     fi
     read -p "$prompt " value
     if [ -z "$value" -a -n "$default_value" ]; then
@@ -83,12 +83,30 @@ download_chromedriver() {
     popd
 }
 
+test_image(){
+    tests_dir=../../selenoid-container-tests/
+    if [ -d "$tests_dir" ]; then
+        echo "Running test suite on image."
+        docker rm -f selenium || true
+        docker run -d --privileged --name selenium -p 4445:4444 $1
+        echo "Waiting for image to start..."
+        sleep 20
+        pushd "$tests_dir"
+        mvn clean test -Dgrid.connection.url="http://localhost:4445/wd/hub" -Dgrid.browser.name=chrome || true
+        popd
+        docker rm -f selenium || true
+    else
+        echo "Skipping tests as $tests_dir does not exist."
+    fi
+}
+
 require_command "docker"
 require_command "sed"
 require_command "true"
 require_command "false"
 require_command "wget"
 require_command "unzip"
+require_command "cut"
 
 TMP_DIR="android/tmp"
 rm -Rf ./"$TMP_DIR" || true
@@ -98,7 +116,7 @@ cp android/entrypoint.sh "$TMP_DIR/entrypoint.sh"
 appium_version=$(request_answer "Specify Appium version:" "1.13.0")
 
 until [ "$?" -ne 0 ]; do
-    android_version=$(request_answer "Specify Android version:" "6.0")
+    android_version=$(request_answer "Specify Android version:" "8.1")
     if validate_android_version "$android_version"; then
         break
     fi
@@ -117,20 +135,26 @@ default_tag="$android_version"
 chrome_mobile=$(request_answer "Are you building a Chrome Mobile image (for mobile web testing):" "n")
 if [ "y" == "$chrome_mobile" ]; then
     sed -i.bak 's|@CHROME_MOBILE@|yes|g' "$TMP_DIR/entrypoint.sh"
-    image_name="chrome"
-    default_tag="mobile-$android_version"
+    image_name="chrome-mobile"
+    default_tag="$android_version"
 else
     sed -i.bak 's|@CHROME_MOBILE@||g' "$TMP_DIR/entrypoint.sh"
 fi
 
 chromedriver_version=$(request_answer "Specify Chromedriver version if needed (required for Chrome Mobile):")
+chrome_major_version="$(cut -d'.' -f1 <<<${chromedriver_version})"
+chrome_minor_version="$(cut -d'.' -f2 <<<${chromedriver_version})"
+chrome_version="$chrome_major_version.$chrome_minor_version"
+if [ -n ${chrome_version} ]; then
+    default_tag="$chrome_version"
+fi
 
 tag=$(request_answer "Specify image tag:" "selenoid/$image_name:$default_tag")
 need_quickboot=$(request_answer "Add Android quick boot snapshot?" "y")
 
 if [ -n "$chromedriver_version" ]; then
     download_chromedriver "$chromedriver_version"
-fi 
+fi
 
 rm -Rf *.bak || true
 set -x
@@ -147,7 +171,7 @@ docker build -t "$tmp_tag" \
     --build-arg SDCARD_SIZE="$sdcard_size" \
     --build-arg USERDATA_SIZE="$userdata_size" android
 
-if [ "$need_quickboot" == "y" ]; then 
+if [ "$need_quickboot" == "y" ]; then
     id=$(docker run -e CHROME_MOBILE="$chrome_mobile" -d --privileged "$tmp_tag")
     sleep 60
     docker exec "$id" "/usr/bin/emulator-snapshot.sh"
@@ -158,3 +182,13 @@ else
     docker tag "$tmp_tag" "$tag"
 fi
 docker rmi -f "$tmp_tag" || true
+set +x
+
+if [ "y" == "$chrome_mobile" ]; then
+    test_image "$tag"
+fi
+
+read -p "Push?" yn
+if [ "$yn" == "y" ]; then
+    docker push "$tag"
+fi
